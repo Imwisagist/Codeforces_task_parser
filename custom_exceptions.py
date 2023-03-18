@@ -41,3 +41,8 @@ class SendRequestToDbFailed(Exception):
 class ErrorInCycle(Exception):
     """Ошибка внутри цикла."""
     pass
+
+
+class UnknownTableName(Exception):
+    """Неизвестная таблица."""
+    pass
