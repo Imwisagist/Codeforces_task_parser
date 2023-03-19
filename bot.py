@@ -1,6 +1,7 @@
 import aiopg
+import requests
 from aiogram import Bot, Dispatcher, executor, types
-
+import re
 import config as cfg
 
 dp = Dispatcher(Bot(token=cfg.TELEGRAM_TOKEN))
@@ -56,8 +57,67 @@ async def print_ratings_for_tag(message: types.Message):
 
 @dp.message_handler(commands=['contests'])
 async def print_contests_for_tag_and_rating(message: types.Message):
-    tag_raiting_pair = message.text.split()[-2:]
-    await message.answer(str(tag_raiting_pair))
+    tag_difficulty: list = message.text.split()[-2:]
+    response: list = await get_data_from_db(
+        f"""
+        SELECT id, number, tag, rating from contests 
+        Where tag='{tag_difficulty[0]}' and rating='{int(tag_difficulty[1])}'
+        """
+    )
+    for contest in response[::-1]:
+        await message.answer("""
+Идентификатор - {},
+Номер контеста - {},
+Тема - {},
+Сложность - {}""".format(*contest))
+
+
+async def parse_contest(source_contest: list) -> list:
+    parsed_tasks: list = []
+    regex = r"[^a-zA-Zа-яА-Я0-9, ]+"
+    for tasks in source_contest:
+        for j in tasks:
+            for pi in j:
+                pi = re.sub(regex, "", pi)
+                pi = pi.split(',')
+                id, *tags, count, name, number_idx, difficulty = pi
+                parsed_tasks.append(
+                    [
+                        int(id), ', '.join(tags),
+                        int(count), name, number_idx, int(difficulty)
+                    ]
+                )
+    return parsed_tasks
+
+
+@dp.message_handler(commands=['contest'])
+async def print_tasks_from_define_contest(message: types.Message):
+    contest_id = int(message.text.split()[-1])
+    source_contest = await get_data_from_db(
+        f"SELECT tasks from contests Where id={contest_id}"
+    )
+    [await message.answer("""
+Идентификатор - {},
+Темы - ({}),
+Решено раз - {},
+Название - "{}", 
+Номер и индекс - {},
+Сложность - {},
+""".format(*task)) for task in await parse_contest(source_contest)]
+
+
+@dp.message_handler(commands=['task'])
+async def print_task_description(message: types.Message):
+    task_id = int(message.text.split()[-1])
+    name_number_index = await get_data_from_db(
+        f"SELECT name_and_number FROM tasks WHERE id={task_id}"
+    )
+
+    number = name_number_index[-1][-1][-1][-2::-1]
+    index = name_number_index[-1][-1][-1][-1]
+    await message.answer(
+        f"https://codeforces.com/problemset/problem/{number}/{index}"
+    )
 
 
 @dp.message_handler(commands=['help'])
@@ -77,6 +137,8 @@ async def begin_info(message: types.Message):
 Получить все доступные темы контестов: /tags
 Получить все доступные сложности для темы: /ratings tag
 Получить контесты по теме и сложности: /contests tag rating
+Получить задачи из контеста: /contest id_contest
+Получить описание задачи: /task task_id
 """)
 
 
