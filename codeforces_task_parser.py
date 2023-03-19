@@ -8,6 +8,8 @@ import telegram
 import config as cfg
 import custom_exceptions
 
+connection = None
+
 
 def connect_to_db():
     log.info('-------------------Запуск программы-------------------------')
@@ -106,7 +108,7 @@ def adding_tasks_in_table(
     )
     filling_table('tasks', new_tasks)
     send_request_to_db('DROP TABLE contests')
-    check_or_create_table(('contests', cfg.CONTESTS_MAKE_SQL_QUERY))
+    check_or_create_table(('contests', cfg.CONTESTS_TABLE_MAKE_SQL_QUERY))
 
 
 def filling_table(table_name: str, content: list) -> None:
@@ -268,8 +270,8 @@ def main() -> None:
         connection = connect_to_db()
         check_or_create_table(
             (
-                ('tasks', cfg.TASKS_MAKE_SQL_QUERY),
-                ('contests', cfg.CONTESTS_MAKE_SQL_QUERY),
+                ('tasks', cfg.TASKS_TABLE_MAKE_SQL_QUERY),
+                ('contests', cfg.CONTESTS_TABLE_MAKE_SQL_QUERY),
             ),
 
         )

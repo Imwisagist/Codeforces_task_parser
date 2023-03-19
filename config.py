@@ -1,13 +1,13 @@
+import asyncio
 import logging
 import os
 import sys
 from logging import Logger
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 
 ENDPOINT: str = 'https://codeforces.com/api/problemset.problems?lang=ru'
 RETRY_TIME: int = 3600
-connection = None
 
 load_dotenv()
 TELEGRAM_CHAT_ID: str = os.getenv('TELEGRAM_CHAT_ID')
@@ -17,11 +17,14 @@ USER: str = os.getenv('USER')
 DB_NAME: str = os.getenv('PASSWORD')
 PASSWORD: str = os.getenv('DB_NAME')
 
-CONTESTS_MAKE_SQL_QUERY: str = """
+DSN = f'dbname={DB_NAME} user={USER} password={PASSWORD} host={HOST}'
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+CONTESTS_TABLE_MAKE_SQL_QUERY: str = """
 CREATE TABLE contests(id SERIAL PRIMARY KEY, number int NOT NULL,
 tag varchar(255) NOT NULL, rating int NOT NULL, tasks varchar(255)[] NOT NULL);
 """
-TASKS_MAKE_SQL_QUERY: str = """
+TASKS_TABLE_MAKE_SQL_QUERY: str = """
 CREATE TABLE tasks(id SERIAL PRIMARY KEY, tags varchar(255)[] NOT NULL,
 count_solved int NOT NULL, name_and_number varchar(255)[2] NOT NULL,rating int);
 """
