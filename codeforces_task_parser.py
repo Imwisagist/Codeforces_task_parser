@@ -83,7 +83,8 @@ def get_parse_response(response: dict) -> list:
                 problems_statistic[i].get('solvedCount'),
                 [
                     problems[i].get('name'),
-                    str(problems[i].get('contestId')) + problems[i].get('index')
+                    str(problems[i].get('contestId')) + '/'
+                    + problems[i].get('index'),
                 ],
                 problems[i].get('rating', 0),
             ]

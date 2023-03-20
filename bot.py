@@ -1,7 +1,9 @@
+import re
+
 import aiopg
 import requests
 from aiogram import Bot, Dispatcher, executor, types
-import re
+from bs4 import BeautifulSoup
 import config as cfg
 
 dp = Dispatcher(Bot(token=cfg.TELEGRAM_TOKEN))
@@ -13,55 +15,80 @@ async def get_data_from_db(sql_query: str) -> list:
     async with pool.acquire() as connection:
         async with connection.cursor() as cursor:
             await cursor.execute(sql_query)
-            response = await cursor.fetchall()
+            data = await cursor.fetchall()
 
         pool.close()
 
-    return response
+    return data
 
 
-async def get_tags() -> list:
-    source_tags: list = await get_data_from_db(
-        'SELECT DISTINCT tag FROM contests ORDER BY tag'
-    )
-    return await parse_db_response(source_tags)
+async def get_unique_tags_or_ratings(column_name: str, tag=None) -> list:
+    piece = f"WHERE tag='{tag}'"
+    sql_query: str = f"""SELECT DISTINCT {column_name} FROM contests
+                {piece if tag else ''} ORDER BY {column_name}"""
+
+    return await parse_db_response(await get_data_from_db(sql_query))
 
 
-async def parse_db_response(response: list) -> list:
-    parsed_response: list = []
+async def parse_db_response(db_response: list) -> list:
+    return [str_val[0] for str_val in [tup for tup in db_response]]
 
-    for tuple_value in response:
-        for str_value in tuple_value:
-            parsed_response.append(str_value)
 
-    return parsed_response
+async def parse_contest(source_contest: list) -> list:
+    parsed_tasks: list = []
+    for tuple_tasks in source_contest:
+        for tasks_list in tuple_tasks:
+            for source_task in tasks_list:
+                task = re.sub(cfg.REGEX, "", source_task).split(',')
+                idx, *tags, count_solved, name, number_idx, difficulty = task
+                parsed_tasks.append(
+                    [
+                        int(idx), ', '.join(tags),
+                        int(count_solved), name, number_idx, int(difficulty)
+                    ]
+                )
+    return parsed_tasks
+
+
+async def get_task_descriptions(task_url: str) -> str:
+    response = requests.get(task_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    description = soup.find('div', {'class': 'problem-statement'})
+    return description.text.strip()
 
 
 @dp.message_handler(commands=['tags'])
 async def print_tags(message: types.Message):
-    await message.answer(', '.join(await get_tags()))
+    await message.answer(', '.join(await get_unique_tags_or_ratings('tag')))
 
 
 @dp.message_handler(commands=['ratings'])
 async def print_ratings_for_tag(message: types.Message):
     tag = message.text.split()[-1]
 
-    if tag not in await get_tags():
+    if tag not in await get_unique_tags_or_ratings('tag'):
         return await message.answer('Неизвестная тема')
 
     source: list = await get_data_from_db(
-        f"SELECT DISTINCT rating FROM contests WhERE tag='{tag}'"
+        f"SELECT DISTINCT rating FROM contests WHERE tag='{tag}'"
     )
     await message.answer(', '.join(map(str, await parse_db_response(source))))
 
 
 @dp.message_handler(commands=['contests'])
 async def print_contests_for_tag_and_rating(message: types.Message):
-    tag_difficulty: list = message.text.split()[-2:]
+    tag, rating = message.text.split()[-2:]
+
+    tags: list = await get_unique_tags_or_ratings('tag')
+    ratings: list = await get_unique_tags_or_ratings('rating', tag)
+    if (tag not in tags) or (int(rating) not in ratings):
+        return await message.answer('Неизвестная пара тема/сложность')
+
     response: list = await get_data_from_db(
         f"""
         SELECT id, number, tag, rating from contests 
-        Where tag='{tag_difficulty[0]}' and rating='{int(tag_difficulty[1])}'
+        WHERE tag='{tag}' and rating='{rating}'
         """
     )
     for contest in response[::-1]:
@@ -70,24 +97,6 @@ async def print_contests_for_tag_and_rating(message: types.Message):
 Номер контеста - {},
 Тема - {},
 Сложность - {}""".format(*contest))
-
-
-async def parse_contest(source_contest: list) -> list:
-    parsed_tasks: list = []
-    regex = r"[^a-zA-Zа-яА-Я0-9, ]+"
-    for tasks in source_contest:
-        for j in tasks:
-            for pi in j:
-                pi = re.sub(regex, "", pi)
-                pi = pi.split(',')
-                id, *tags, count, name, number_idx, difficulty = pi
-                parsed_tasks.append(
-                    [
-                        int(id), ', '.join(tags),
-                        int(count), name, number_idx, int(difficulty)
-                    ]
-                )
-    return parsed_tasks
 
 
 @dp.message_handler(commands=['contest'])
@@ -113,10 +122,9 @@ async def print_task_description(message: types.Message):
         f"SELECT name_and_number FROM tasks WHERE id={task_id}"
     )
 
-    number = name_number_index[-1][-1][-1][-2::-1]
-    index = name_number_index[-1][-1][-1][-1]
+    number, index = name_number_index[-1][-1][-1].split('/')
     await message.answer(
-        f"https://codeforces.com/problemset/problem/{number}/{index}"
+        await get_task_descriptions(f"https://codeforces.com/problemset/problem/{number}/{index}?locale=ru")
     )
 
 

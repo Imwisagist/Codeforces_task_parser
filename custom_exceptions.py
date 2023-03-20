@@ -46,3 +46,4 @@ class ErrorInCycle(Exception):
 class UnknownTableName(Exception):
     """Неизвестная таблица."""
     pass
+
