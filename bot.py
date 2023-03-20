@@ -11,6 +11,55 @@ import config as cfg
 dp = Dispatcher(Bot(token=cfg.TELEGRAM_TOKEN))
 
 
+class Chapter:
+    def __init__(self, task: BeautifulSoup, class_: str, section: str) -> None:
+        self.output = self.value = self.title = None
+        self.task = task
+        self.class_ = class_
+        self.activate_fields(section)
+
+    def activate_fields(self, section) -> None:
+        if section == 'header':
+            self.activate_header_fields()
+        elif section == 'i/o':
+            self.activate_input_or_output_fields()
+        elif section == 'tests':
+            self.activate_tests_fields()
+
+    def activate_tests_fields(self) -> None:
+        def parsed_data(data):
+            input_ = data.find('div', {'class': 'title'})
+            value_ = str(
+                input_.next_sibling).replace('<br/>', '\n')[5:-6].rstrip()
+            input_ = input_.text.strip()
+            return f"\n" + input_ + f"\n{cfg.SEP}\n" + value_ + f"\n{cfg.SEP}"
+
+        examples = self.task.find(
+            'div', {'class': 'section-title'}).text.strip()
+
+        inputs = self.task.findAll('div', {'class': 'input'})
+        outputs = self.task.findAll('div', {'class': 'output'})
+
+        self.output = (examples + f'\n{cfg.SEP}' + parsed_data(inputs[0]) +
+                       parsed_data(outputs[0]) + parsed_data(inputs[1]) +
+                       parsed_data(outputs[0])
+                       )
+
+    def activate_input_or_output_fields(self) -> None:
+        self.title = self.task.find('div', {'class': f'{self.class_}'})
+        self.value = self.title.next_sibling.text.strip()
+        self.title = self.title.text.strip()
+        self.output = self.title + f"\n{cfg.SEP}\n" + self.value
+
+    def activate_header_fields(self) -> None:
+        self.class_ = self.task.find('div', {'class': f'{self.class_}'})
+        self.title = self.class_.find(
+            'div', {'class': 'property-title'}).text.strip()
+        self.value = str(self.class_.find(
+            'div', {'class': 'property-title'}).next_sibling)
+        self.output = self.title + ': ' + self.value
+
+
 async def get_data_from_db(sql_query: str) -> list:
     pool = await aiopg.create_pool(cfg.DSN)
 
@@ -51,63 +100,44 @@ async def parse_contest(source_contest: list) -> list:
     return parsed_tasks
 
 
-class Chapter:
-    def __init__(self, task: BeautifulSoup, class_: str, section: str) -> None:
-        self.output = self.value = self.description = self.header = None
-        self.task = task
-        self.class_ = class_
-        self.activate_fields(section)
-
-    def activate_fields(self, title) -> None:
-        if title == 'header':
-            self.activate_header_fields()
-        elif title == 'input':
-            self.activate_input_fields()
-
-    def activate_input_fields(self) -> None:
-        self.description = self.task.find('div', {'class': f'{self.class_}'})
-        self.value = self.description.next_sibling.text.strip()
-        self.description = self.description.text.strip()
-        self.output = self.description + '\n' + self.value
-
-    def activate_header_fields(self) -> None:
-        self.class_ = self.task.find('div', {'class': f'{self.class_}'})
-        self.description = self.class_.find(
-            'div', {'class': 'property-title'}).text.strip()
-        self.value = str(self.class_.find(
-            'div', {'class': 'property-title'}).next_sibling)
-        self.output = self.description + ': ' + self.value
-
-
 async def get_task_descriptions(task_url: str) -> str:
     response: Response = requests.get(task_url)
     soup: BeautifulSoup = BeautifulSoup(response.text, 'html.parser')
 
-    task: BeautifulSoup = soup.find('div', {'class': 'problem-statement'})
-
     header: BeautifulSoup = soup.find('div', {'class': 'header'})
     title: str = header.find('div', {'class': 'title'}).text.strip()
-    time_limit: Chapter = Chapter(task, 'time-limit', 'header')
-    memory_limit: Chapter = Chapter(task, 'memory-limit', 'header')
-    file_input: Chapter = Chapter(task, 'input-file', 'header')
+    time_limit: Chapter = Chapter(header, 'time-limit', 'header')
+    memory_limit: Chapter = Chapter(header, 'memory-limit', 'header')
+    file_input: Chapter = Chapter(header, 'input-file', 'header')
     file_output: Chapter = Chapter(header, 'output-file', 'header')
 
     task_description: str = soup.find(
         'div', {'class': 'header'}).next_sibling.text.strip()
 
     input_: BeautifulSoup = soup.find('div', {'class': 'input-specification'})
-    input_specification: Chapter = Chapter(input_, 'section-title', 'input')
+    input_specification: Chapter = Chapter(input_, 'section-title', 'i/o')
+
+    output_: BeautifulSoup = soup.find('div', {'class': 'output-specification'})
+    output_specification: Chapter = Chapter(output_, 'section-title', 'i/o')
+
+    test_soup: BeautifulSoup = soup.find('div', {'class': 'sample-tests'})
+    tests: Chapter = Chapter(test_soup, 'input', 'tests')
 
     result = f"""
 {title}\n{'--'*len(title)}
 {time_limit.output}
 {memory_limit.output}
+{cfg.SEP}
 {file_input.output}
 {file_output.output}
-{'--'*25}
+{cfg.SEP}
 {task_description}
-{'--'*25}
+{cfg.SEP}
 {input_specification.output}
+{cfg.SEP}
+{output_specification.output}
+{cfg.SEP}
+{tests.output}
 """
 
     return result

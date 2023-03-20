@@ -20,6 +20,7 @@ PASSWORD: str = os.getenv('DB_NAME')
 DSN = f'dbname={DB_NAME} user={USER} password={PASSWORD} host={HOST}'
 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 REGEX = r"[^a-zA-Zа-яА-Я0-9, ]+"
+SEP = '--'*25
 
 CONTESTS_TABLE_MAKE_SQL_QUERY: str = """
 CREATE TABLE contests(id SERIAL PRIMARY KEY, number int NOT NULL,
