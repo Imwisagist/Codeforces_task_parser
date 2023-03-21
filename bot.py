@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from bs4 import BeautifulSoup
 from requests import Response
 
-import config as cfg
+import configs.config as cfg
 
 dp = Dispatcher(Bot(token=cfg.TELEGRAM_TOKEN))
 
@@ -172,7 +172,8 @@ async def print_ratings_for_tag(message: types.Message):
     source: list = await get_data_from_db(
         f"SELECT DISTINCT rating FROM contests WHERE tag='{tag}'"
     )
-    await message.answer(', '.join(map(str, await parse_db_response(source))))
+    await message.answer(', '.join(map(
+        str, sorted(await parse_db_response(source)))))
 
 
 @dp.message_handler(commands=['contest'])

@@ -5,8 +5,8 @@ import psycopg2
 import requests
 import telegram
 
-import config as cfg
-import custom_exceptions
+import configs.config as cfg
+import configs.custom_exceptions as custom_exceptions
 
 connection = None
 
