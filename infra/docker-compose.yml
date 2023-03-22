@@ -1,0 +1,30 @@
+version: '3.8'
+services:
+
+  db:
+    image: postgres:13.0-alpine
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    container_name: db
+
+  parser:
+     image: imwisagist/codeforces_task_parser:v1.0
+     restart: always
+     depends_on:
+       - db
+     env_file:
+       - .env
+     container_name: parser
+
+  bot:
+    image: imwisagist/codeforces_bot:v1.0
+    restart: always
+    depends_on:
+      - parser
+    env_file:
+      - .env
+    container_name: bot
+
+volumes:
+  postgres_data:

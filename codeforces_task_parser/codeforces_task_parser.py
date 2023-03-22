@@ -17,7 +17,7 @@ def connect_to_db():
 
     try:
         connect = psycopg2.connect(
-            host=cfg.HOST, user=cfg.USER,
+            host=cfg.HOST, user=cfg.USER, port=cfg.PORT,
             password=cfg.PASSWORD, database=cfg.DB_NAME,
         )
     except Exception as _error:

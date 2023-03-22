@@ -14,9 +14,17 @@ dp = Dispatcher(Bot(token=cfg.TELEGRAM_TOKEN))
 class Chapter:
     def __init__(self, task: BeautifulSoup, class_: str, section: str) -> None:
         self.output = self.value = self.title = None
-        self.task = task
         self.class_ = class_
+        self.task = task
         self.activate_fields(section)
+
+    @staticmethod
+    def parsed_data(data):
+        input_ = data.find('div', {'class': 'title'})
+        value_ = str(
+            input_.next_sibling).replace('<br/>', '\n')[5:-6].rstrip()
+        input_ = input_.text.strip()
+        return f"\n" + input_ + f"\n{cfg.SEP}\n" + value_ + f"\n{cfg.SEP}"
 
     def activate_fields(self, section) -> None:
         if section == 'header':
@@ -26,31 +34,6 @@ class Chapter:
         elif section == 'tests':
             self.activate_tests_fields()
 
-    def activate_tests_fields(self) -> None:
-        def parsed_data(data):
-            input_ = data.find('div', {'class': 'title'})
-            value_ = str(
-                input_.next_sibling).replace('<br/>', '\n')[5:-6].rstrip()
-            input_ = input_.text.strip()
-            return f"\n" + input_ + f"\n{cfg.SEP}\n" + value_ + f"\n{cfg.SEP}"
-
-        examples = self.task.find(
-            'div', {'class': 'section-title'}).text.strip()
-
-        inputs = self.task.findAll('div', {'class': 'input'})
-        outputs = self.task.findAll('div', {'class': 'output'})
-
-        self.output = (examples + f'\n{cfg.SEP}' + parsed_data(inputs[0]) +
-                       parsed_data(outputs[0]) + parsed_data(inputs[1]) +
-                       parsed_data(outputs[0])
-                       )
-
-    def activate_input_or_output_fields(self) -> None:
-        self.title = self.task.find('div', {'class': f'{self.class_}'})
-        self.value = self.title.next_sibling.text.strip()
-        self.title = self.title.text.strip()
-        self.output = self.title + f"\n{cfg.SEP}\n" + self.value
-
     def activate_header_fields(self) -> None:
         self.class_ = self.task.find('div', {'class': f'{self.class_}'})
         self.title = self.class_.find(
@@ -59,21 +42,44 @@ class Chapter:
             'div', {'class': 'property-title'}).next_sibling)
         self.output = self.title + ': ' + self.value
 
+    def activate_input_or_output_fields(self) -> None:
+        self.title = self.task.find('div', {'class': f'{self.class_}'})
+        self.value = self.title.next_sibling.text.strip()
+        self.title = self.title.text.strip()
+        self.output = self.title + f"\n{cfg.SEP}\n" + self.value
+
+    def activate_tests_fields(self) -> None:
+        examples = self.task.find(
+            'div', {'class': 'section-title'}).text.strip()
+        inputs = self.task.findAll('div', {'class': 'input'})
+        outputs = self.task.findAll('div', {'class': 'output'})
+        self.output = (
+            examples + f'\n{cfg.SEP}' + self.parsed_data(inputs[0]) +
+            self.parsed_data(outputs[0]) +
+            (self.parsed_data(inputs[1]) + self.parsed_data(outputs[1])) if
+            len(inputs) == 2 else ''
+        )
+
 
 async def get_data_from_db(sql_query: str) -> list:
-    pool = await aiopg.create_pool(cfg.DSN)
+    try:
+        pool = await aiopg.create_pool(cfg.DSN)
 
-    async with pool.acquire() as connection:
-        async with connection.cursor() as cursor:
-            await cursor.execute(sql_query)
-            data = await cursor.fetchall()
-        pool.close()
+        async with pool.acquire() as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute(sql_query)
+                data = await cursor.fetchall()
+            pool.close()
+    except Exception as _error:
+        message: str = 'Не удалось получить данные из БД'
+        log.critical(message, _error, exc_info=True)
+        return [('False',)]
 
     return data
 
 
 async def get_unique_tags_or_ratings(column_name: str, tag=None) -> list:
-    piece = f"WHERE tag='{tag}'"
+    piece: str = f"WHERE tag='{tag}'"
     sql_query: str = f"""SELECT DISTINCT {column_name} FROM contests
                 {piece if tag else ''} ORDER BY {column_name}"""
 
@@ -89,7 +95,7 @@ async def parse_contest(source_contest: list) -> list:
     for tuple_tasks in source_contest:
         for tasks_list in tuple_tasks:
             for source_task in tasks_list:
-                task = re.sub(cfg.REGEX, "", source_task).split(',')
+                task: list = re.sub(cfg.REGEX, "", source_task).split(',')
                 idx, *tags, count_solved, name, number_idx, difficulty = task
                 parsed_tasks.append(
                     [
@@ -101,7 +107,15 @@ async def parse_contest(source_contest: list) -> list:
 
 
 async def get_task_descriptions(task_url: str) -> str:
-    response: Response = requests.get(task_url)
+    try:
+        response: Response = requests.get(task_url)
+        if response.status_code != 200:
+            raise Exception('Не успешный код ответа')
+    except Exception as _error:
+        message: str = 'Codeforces не отвечает'
+        log.critical(message, _error, exc_info=True)
+        return message
+
     soup: BeautifulSoup = BeautifulSoup(response.text, 'html.parser')
 
     header: BeautifulSoup = soup.find('div', {'class': 'header'})
@@ -143,18 +157,19 @@ async def get_task_descriptions(task_url: str) -> str:
     return result
 
 
-@dp.message_handler(commands=['task'])
-async def print_task_description(message: types.Message):
-    task_id = int(message.text.split()[-1])
-    name_number_index = await get_data_from_db(
-        f"SELECT name_and_number FROM tasks WHERE id={task_id}"
-    )
+async def check_exists(sql_query: str) -> bool:
+    result: list = await get_data_from_db(f"SELECT EXISTS({sql_query})")
+    return True if bool(result[0][0]) else False
 
-    num, idx = name_number_index[-1][-1][-1].split('/')
-    await message.answer(
-        await get_task_descriptions(
-            f"https://codeforces.com/problemset/problem/{num}/{idx}?locale=ru")
-    )
+
+@dp.message_handler(commands=['help'])
+async def get_some_help(message: types.Message):
+    await message.answer("""
+Уточнения:\n
+1)"task without tags" среди тем означает что у этой задачи тема не задана.
+2)"0" среди рейтингов означает что у этой задачи рейтинг не задан.
+3)Телеграм автора @Imwisagist
+""")
 
 
 @dp.message_handler(commands=['tags'])
@@ -164,8 +179,11 @@ async def print_tags(message: types.Message):
 
 @dp.message_handler(commands=['ratings'])
 async def print_ratings_for_tag(message: types.Message):
-    tag = message.text.split()[-1]
+    data: list = message.text.split()
+    if len(data) != 2:
+        return await message.answer('Неверное количество аргументов')
 
+    tag: str = data[-1]
     if tag not in await get_unique_tags_or_ratings('tag'):
         return await message.answer('Неизвестная тема')
 
@@ -178,27 +196,46 @@ async def print_ratings_for_tag(message: types.Message):
 
 @dp.message_handler(commands=['contest'])
 async def print_tasks_from_define_contest(message: types.Message):
-    contest_id = int(message.text.split()[-1])
-    source_contest = await get_data_from_db(
-        f"SELECT tasks from contests Where id={contest_id}"
-    )
+    if len(message.text.split()) != 2:
+        return await message.answer('Напишите один идентификатор контеста')
+    try:
+        contest_id = int(message.text.split()[-1])
+    except Exception as _error:
+        return await message.answer('Идентификатор должен быть целым числом')
+
+    sql_query: str = f"SELECT tasks from contests Where id={contest_id}"
+    if not await check_exists(sql_query):
+        return await message.answer('Контест не найден')
+
+    contest = await get_data_from_db(sql_query)
     [await message.answer("""
-Идентификатор - {},
-Темы - ({}),
-Решено раз - {},
-Название - "{}", 
-Номер и индекс - {},
-Сложность - {},
-""".format(*task)) for task in await parse_contest(source_contest)]
+Идентификатор задачи- {}
+Темы - ({})
+Решено раз - {}
+Название - "{}"
+Номер и индекс - {}
+Сложность - {}
+""".format(*task)) for task in await parse_contest(contest)]
 
 
 @dp.message_handler(commands=['contests'])
 async def print_contests_for_tag_and_rating(message: types.Message):
-    tag, rating = message.text.split()[-2:]
+    data: list = message.text.split()
+    if len(data) != 3:
+        return await message.answer('Неверное количество аргументов')
+    tag, rating = data[1:]
+
+    try:
+        rating = int(rating)
+    except Exception as _error:
+        return await message.answer('Сложность должна быть целым числом')
+
+    if not isinstance(tag, str):
+        return await message.answer('Тема должна быть строкой')
 
     tags: list = await get_unique_tags_or_ratings('tag')
     ratings: list = await get_unique_tags_or_ratings('rating', tag)
-    if (tag not in tags) or (int(rating) not in ratings):
+    if (tag not in tags) or (rating not in ratings):
         return await message.answer('Неизвестная пара тема/сложность')
 
     response: list = await get_data_from_db(
@@ -209,23 +246,38 @@ async def print_contests_for_tag_and_rating(message: types.Message):
     )
     for contest in response[::-1]:
         await message.answer("""
-Идентификатор - {},
-Номер контеста - {},
-Тема - {},
+Идентификатор - {}
+Номер контеста - {}
+Тема - {}
 Сложность - {}""".format(*contest))
 
 
-@dp.message_handler(commands=['help'])
-async def get_some_help(message: types.Message):
-    await message.answer("""
-Уточнения:\n
-1)"task without tags" среди тем означает что у этой задачи тема не задана.
-2)"0" среди рейтингов означает что у этой задачи рейтинг не задан.
-""")
+@dp.message_handler(commands=['task'])
+async def print_task_description(message: types.Message):
+    data = message.text.split()
+    if len(data) != 2:
+        return await message.answer('Неверное количество аргументов')
+    try:
+        task_id = int(message.text.split()[1])
+    except Exception as _error:
+        return await message.answer('Неверный тип данных')
+
+    sql_query: str = f"SELECT name_and_number FROM tasks WHERE id={task_id}"
+    if not await check_exists(sql_query):
+        return await message.answer('Задача с таким идентификатором не найдена')
+
+    name_number_index: list = await get_data_from_db(sql_query)
+
+    num, idx = name_number_index[-1][-1][-1].split('/')
+    await message.answer(
+        await get_task_descriptions(
+            f"https://codeforces.com/problemset/problem/{num}/{idx}?locale=ru")
+    )
 
 
 @dp.message_handler(commands=['start'])
 async def begin_info(message: types.Message):
+    log.info(f'{message.chat.full_name} - {message.chat.mention}')
     await message.answer("""
 Список доступных команд:\n
 Уточнения некоторых моментов: /help
@@ -239,12 +291,12 @@ async def begin_info(message: types.Message):
 
 @dp.message_handler()
 async def unknown_command(message: types.Message):
-    log.info('Вход')
     await message.answer(
-        'Привет, отправь команду /start чтобы узнать доступные команды'
+        'Привет, отправь команду /start чтобы узнать доступные команды!=)'
     )
 
 
 if __name__ == '__main__':
     log = cfg.get_logger('bot', 'bot_log')
     executor.start_polling(dp, skip_updates=True)
+
