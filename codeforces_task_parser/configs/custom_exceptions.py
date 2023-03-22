@@ -8,11 +8,6 @@ class TelegramError(NotForSend):
     pass
 
 
-class BotStartFailed(NotForSend):
-    """Не удалось запустить бота."""
-    pass
-
-
 class BadCodeStatus(Exception):
     """Статус-код ответа не равен 200."""
     pass

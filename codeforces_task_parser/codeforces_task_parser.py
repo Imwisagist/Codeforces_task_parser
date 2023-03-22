@@ -3,7 +3,6 @@ import time
 
 import psycopg2
 import requests
-import telegram
 
 import configs.config as cfg
 import configs.custom_exceptions as custom_exceptions
@@ -141,11 +140,13 @@ def get_count_of_records_in_table(table_name: str) -> int:
     return int(*get_data_from_db(f'SELECT count(*) FROM {table_name}')[0])
 
 
-def send_message_to_tg(from_bot: telegram.Bot, message: str) -> None:
+def send_message_to_tg(message: str) -> None:
     try:
         log.info("Отправка сообщения")
-        from_bot.send_message(cfg.TELEGRAM_CHAT_ID, message)
-    except telegram.error.TelegramError as _error:
+        url = f'https://api.telegram.org/bot{cfg.TELEGRAM_TOKEN}/sendMessage'
+        data = {'chat_id': cfg.TELEGRAM_CHAT_ID, 'text': message}
+        requests.post(url, data)
+    except custom_exceptions.TelegramError as _error:
         raise custom_exceptions.TelegramError(
             f'Сообщение не отправлено, ошибка - {_error}'
         )
@@ -259,13 +260,9 @@ def main() -> None:
             sys.exit(message)
 
         log.info('Токены обнаружены, запуск бота для отправки крит. ошибок')
-        try:
-            bot: telegram.Bot = telegram.Bot(token=cfg.TELEGRAM_TOKEN)
-        except Exception as _error:
-            raise custom_exceptions.BotStartFailed(_error)
         message = 'Бот запущен'
         log.info(message)
-        send_message_to_tg(bot, message)
+        send_message_to_tg(message)
 
         global connection
         connection = connect_to_db()
@@ -297,7 +294,7 @@ def main() -> None:
                         )
                     adding_tasks_in_table(
                        get_last_record_from_table(),
-                       get_parse_response(json_response.get('result'))
+                       get_parse_response(json_response)
                     )
                     tasks_in_db_count = tasks_response_count
                 else:
@@ -322,7 +319,7 @@ def main() -> None:
         connection.rollback()
         message = f'Ошибка во время работы с PostgreSQL:\n {_exception}\n'
         log.critical(message, exc_info=True)
-        send_message_to_tg(bot, message)
+        send_message_to_tg(message)
 
     finally:
         if connection:
