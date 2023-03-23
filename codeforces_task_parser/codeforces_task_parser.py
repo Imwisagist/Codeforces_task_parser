@@ -8,8 +8,6 @@ from aiohttp import ClientResponse
 import configs.config as cfg
 import configs.custom_exceptions as custom_exceptions
 
-connection = None
-
 
 def connect_to_db():
     log.info('-------------------Запуск программы-------------------------')
@@ -26,29 +24,19 @@ def connect_to_db():
     return connect
 
 
-async def get_data_from_db(request: str) -> list:
+async def send_request_to_db(
+        request: str, method: str, data: list = None) -> list | None:
     try:
         with connection.cursor() as cursor:
-            cursor.execute(request)
-            return cursor.fetchall()
-
-    except Exception as _error:
-        raise custom_exceptions.GettingDataFromDbFailed(_error)
-
-
-async def send_request_to_db(request: str) -> None:
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(request)
-    except Exception as _error:
-        raise custom_exceptions.SendRequestToDbFailed(_error)
-
-
-async def send_requests_to_db(request: str, tasks: list) -> None:
-    try:
-        with connection.cursor() as cursor:
-            for i in tasks[::-1]:
-                cursor.execute(request, i)
+            if method == 'GET':
+                cursor.execute(request)
+                return cursor.fetchall()
+            elif method == 'POST':
+                if data:
+                    for i in data[::-1]:
+                        cursor.execute(request, i)
+                else:
+                    cursor.execute(request)
     except Exception as _error:
         raise custom_exceptions.SendRequestToDbFailed(_error)
 
@@ -111,7 +99,7 @@ async def adding_tasks_in_table(
         f'Добавление {len(new_tasks)} задач в таблицу'
     )
     await filling_table('tasks', new_tasks)
-    await send_request_to_db('DROP TABLE contests')
+    await send_request_to_db('DROP TABLE contests', 'POST')
     await check_or_create_table(('contests', cfg.CONTEST_TABLE_MAKE_SQL_QUERY))
 
 
@@ -124,25 +112,25 @@ async def filling_table(table_name: str, content: list) -> None:
         sql_query = cfg.FILLING_CONTESTS_TABLE_SQL_QUERY
     else:
         raise custom_exceptions.UnknownTableName('Неизвестная таблица')
-
-    await send_requests_to_db(sql_query, content)
+    await send_request_to_db(sql_query, 'POST', content)
     connection.commit()
 
 
 async def get_last_record_from_table() -> str:
     log.info('Получение последней записи из таблицы')
-    data: list = await get_data_from_db(
+    data: list = await send_request_to_db(
         """
         SELECT name_and_number FROM tasks
         ORDER BY id DESC LIMIT 1;
-        """
+        """, 'GET'
     )
     return data[0]
 
 
 async def get_count_of_records_in_table(table_name: str) -> int:
     log.info(f'Получение количества записей в таблице {table_name}')
-    data: list = await get_data_from_db(f'SELECT count(*) FROM {table_name}')
+    data: list = await send_request_to_db(
+        f'SELECT count(*) FROM {table_name}', 'GET')
     return int(*data[0])
 
 
@@ -172,8 +160,8 @@ async def check_tokens() -> bool:
 
 async def get_unique_tags_and_rating() -> tuple:
     log.info('Запрос тем и рейтингов из базы')
-    tags_ratings: list = await get_data_from_db(
-        'SELECT tags, rating FROM tasks;')
+    tags_ratings: list = await send_request_to_db(
+        'SELECT tags, rating FROM tasks;', 'GET')
 
     unique_tags: list = []
     unique_rating: list = []
@@ -191,10 +179,10 @@ async def get_unique_tags_and_rating() -> tuple:
 
 async def get_contests(unique_tags: list, unique_rating: list) -> list:
     log.info('Запрос всех задач из базы')
-    tasks: list = await get_data_from_db(
+    tasks: list = await send_request_to_db(
         """
         SELECT tags, count_solved, name_and_number, rating FROM tasks;
-        """
+        """, 'GET'
     )
 
     log.info(
@@ -219,12 +207,12 @@ async def get_contests(unique_tags: list, unique_rating: list) -> list:
         for utag in sorted_unique_tags_copy:
             empty: bool = True
             for urating in unique_rating:
-                data: list = await get_data_from_db(
+                data: list = await send_request_to_db(
                     f"""
                     SELECT * FROM tasks WHERE '{utag}'=ANY(tags)
                     AND rating={urating}
                     AND id not in ({', '.join(given_tasks_ids)}) LIMIT 10;
-                    """
+                    """, 'GET'
                 )
                 if data:
                     empty = False
@@ -241,16 +229,16 @@ async def get_contests(unique_tags: list, unique_rating: list) -> list:
 async def check_or_create_table(table_name_and_sql_query: tuple) -> None:
     for table_name, sql_query in table_name_and_sql_query:
         log.info(f'Проверка БД на наличие таблицы {table_name}')
-        response: list = await get_data_from_db(
+        response: list = await send_request_to_db(
             f"""
             SELECT table_name FROM information_schema.tables
             WHERE table_name = '{table_name}';
-            """
+            """, 'GET'
         )
         if not response:
             log.info(
                 f'Таблица {table_name} не найдена, создание новой таблицы')
-            await send_request_to_db(sql_query)
+            await send_request_to_db(sql_query, 'POST')
             connection.commit()
             log.info(f'Таблица {table_name} создана, первичное заполнение')
             if table_name == 'contests':

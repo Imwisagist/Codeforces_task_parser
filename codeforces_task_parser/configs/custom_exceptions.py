@@ -23,11 +23,6 @@ class ResponseFromApiWasntRecieved(Exception):
     pass
 
 
-class GettingDataFromDbFailed(Exception):
-    """Не удалось получить данные из базы."""
-    pass
-
-
 class SendRequestToDbFailed(Exception):
     """Не удалось отправить запрос к базе."""
     pass
