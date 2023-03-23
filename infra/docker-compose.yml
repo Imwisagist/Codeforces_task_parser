@@ -4,12 +4,16 @@ services:
   db:
     image: postgres:13.0-alpine
     restart: always
+    environment:
+      POSTGRES_DB: "postgres"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     container_name: db
 
   parser:
-     image: imwisagist/codeforces_task_parser
+     image: imwisagist/codeforces_task_parser:v1.1
      restart: always
      depends_on:
        - db
@@ -18,7 +22,7 @@ services:
      container_name: parser
 
   bot:
-    image: imwisagist/codeforces_bot
+    image: imwisagist/codeforces_bot:v1.1
     restart: always
     depends_on:
       - parser

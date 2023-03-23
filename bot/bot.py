@@ -152,6 +152,7 @@ async def get_task_descriptions(task_url: str) -> str:
 {output_specification.output}
 {cfg.SEP}
 {tests.output}
+{task_url}
 """
 
     return result
@@ -166,9 +167,8 @@ async def check_exists(sql_query: str) -> bool:
 async def get_some_help(message: types.Message):
     await message.answer("""
 Уточнения:\n
-1)"task without tags" среди тем означает что у этой задачи тема не задана.
-2)"0" среди рейтингов означает что у этой задачи рейтинг не задан.
-3)Телеграм автора @Imwisagist
+1)"0" среди рейтингов означает что у этой задачи рейтинг не задан.
+2)Телеграм автора @Imwisagist
 """)
 
 

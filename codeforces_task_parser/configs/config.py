@@ -1,10 +1,12 @@
-import asyncio
+# import asyncio
 import logging
 import os
 import sys
 from logging import Logger
 
 from dotenv import load_dotenv
+
+# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 ENDPOINT: str = 'https://codeforces.com/api/problemset.problems?lang=ru'
 RETRY_TIME: int = 3600
@@ -13,11 +15,8 @@ load_dotenv()
 TELEGRAM_CHAT_ID: str = os.getenv('TELEGRAM_CHAT_ID')
 TELEGRAM_TOKEN: str = os.getenv('TELEGRAM_TOKEN')
 USER = DB_NAME = PASSWORD = 'postgres'
-HOST: str = 'localhost'   # localhost для локального запуска # db для докера
+HOST: str = 'db'   # localhost для локального запуска # db для докера
 PORT: int = 5432
-
-DSN: str = f'dbname={DB_NAME} user={USER} password={PASSWORD} host={HOST}'
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 CONTEST_TABLE_MAKE_SQL_QUERY: str = """
 CREATE TABLE contests(id SERIAL PRIMARY KEY, number int NOT NULL,
@@ -67,3 +66,25 @@ def get_logger(logger_name: str, logfile_name: str) -> Logger:
     logger.addHandler(file_handler)
 
     return logger
+
+
+rus_tags: dict = {
+    '*special': 'Особая-задача', '2-sat': '2-sat', 'flows': 'Потоки',
+    'binary search': 'Бинарный-поиск', 'bitmasks': 'Битмаски',
+    'brute force': 'Перебор', 'combinatorics': 'Комбинаторика',
+    'chinese remainder theorem': 'Китайская-теорема-об-остатках',
+    'constructive algorithms': 'Конструктив', 'dsu': 'СНМ', 'fft': 'БПФ',
+    'data structures': 'Структуры-данных', 'geometry': 'Геометрия',
+    'dfs and similar': 'Поиск-в-глубину-и-подобное', 'games': 'Игры',
+    'divide and conquer': 'Разделяй-и-властвуй', 'graphs': 'Графы',
+    'dp': 'Динамическое-программирование', 'graph matchings': 'Паросочетания',
+    'expression parsing': 'Разбор-выражений', 'greedy': 'Жадные-алгоритмы',
+    'hashing': 'Хэши', 'implementation': 'Реализация', 'matrices': 'Матрицы',
+    'interactive': 'Интерактив', 'math': 'Математика', 'sortings': 'Сортировки',
+    'meet-in-the-middle': 'meet-in-the-middle', 'number theory': 'Теория-чисел',
+    'probabilities': 'Теория-вероятностей', 'schedules': 'Расписания',
+    'shortest paths': 'Кратчайшие-пути', 'strings': 'Строки',
+    'string suffix structures': 'Строковые-суфф.-структуры',
+    'task without tags': 'Задачи-без-тем', 'trees': 'Деревья',
+    'ternary search': 'Бинарный-поиск', 'two pointers': 'Два-указателя'
+}

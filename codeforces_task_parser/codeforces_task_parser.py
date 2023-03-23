@@ -25,7 +25,7 @@ def connect_to_db():
 
 
 async def send_request_to_db(
-        request: str, method: str, data: list = None) -> list | None:
+        request: str, method: str, data: list = None):
     try:
         with connection.cursor() as cursor:
             if method == 'GET':
@@ -65,12 +65,14 @@ async def get_parse_response(response: dict) -> list:
     parsed_data: list = []
 
     for i in range(len(problems)):
-        tags = problems[i].get('tags')
+        tags: list = problems[i].get('tags')
         if not tags:
-            tags = ['task without tags']
+            rus_tags: list = [cfg.rus_tags['task without tags']]
+        else:
+            rus_tags: list = [cfg.rus_tags[tag] for tag in tags]
         parsed_data.append(
             [
-                tags,
+                rus_tags,
                 problems_statistic[i].get('solvedCount'),
                 [
                     problems[i].get('name'),

@@ -1,4 +1,4 @@
-import asyncio
+# import asyncio
 import logging
 import os
 import sys
@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 load_dotenv()
 TELEGRAM_TOKEN: str = os.getenv('TELEGRAM_TOKEN')
 USER = DB_NAME = PASSWORD = 'postgres'
-HOST: str = 'localhost'   # localhost для локального запуска db для докера
+HOST: str = 'db'   # localhost для локального запуска db для докера
 PORT: int = 5432
 
 # For Windows
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 DSN: str = f'dbname={DB_NAME} user={USER} password={PASSWORD} host={HOST}'
 REGEX: str = r"[^a-zA-Zа-яА-Я0-9, ]+"
 SEP: str = '--'*25
