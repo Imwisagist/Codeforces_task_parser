@@ -19,13 +19,14 @@ PORT: int = 5432
 DSN: str = f'dbname={DB_NAME} user={USER} password={PASSWORD} host={HOST}'
 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-CONTESTS_TABLE_MAKE_SQL_QUERY: str = """
+CONTEST_TABLE_MAKE_SQL_QUERY: str = """
 CREATE TABLE contests(id SERIAL PRIMARY KEY, number int NOT NULL,
 tag varchar(255) NOT NULL, rating int NOT NULL, tasks varchar(255)[] NOT NULL);
 """
-TASKS_TABLE_MAKE_SQL_QUERY: str = """
-CREATE TABLE tasks(id SERIAL PRIMARY KEY, tags varchar(255)[] NOT NULL,
-count_solved int NOT NULL, name_and_number varchar(255)[2] NOT NULL,rating int);
+TASK_TABLE_MAKE_SQL_QUERY: str = """
+CREATE TABLE tasks(id SERIAL PRIMARY KEY,
+tags varchar(255)[] NOT NULL, count_solved int NOT NULL,
+name_and_number varchar(255)[2] NOT NULL,rating int);
 """
 FILLING_TASKS_TABLE_SQL_QUERY: str = """
 INSERT INTO tasks (tags, count_solved, name_and_number, rating)

@@ -1,10 +1,9 @@
 import re
 
-import aiopg
 import aiohttp
+import aiopg
 from aiogram import Bot, Dispatcher, executor, types
 from bs4 import BeautifulSoup
-from requests import Response
 
 import configs.config as cfg
 
@@ -24,7 +23,7 @@ class Chapter:
         value_ = str(
             input_.next_sibling).replace('<br/>', '\n')[5:-6].rstrip()
         input_ = input_.text.strip()
-        return f"\n" + input_ + f"\n{cfg.SEP}\n" + value_ + f"\n{cfg.SEP}"
+        return f"\n{input_}\n{cfg.SEP}\n{value_}\n{cfg.SEP}"
 
     def activate_fields(self, section) -> None:
         if section == 'header':
@@ -132,8 +131,8 @@ async def get_task_descriptions(task_url: str) -> str:
     input_: BeautifulSoup = soup.find('div', {'class': 'input-specification'})
     input_specification: Chapter = Chapter(input_, 'section-title', 'i/o')
 
-    output_: BeautifulSoup = soup.find('div', {'class': 'output-specification'})
-    output_specification: Chapter = Chapter(output_, 'section-title', 'i/o')
+    output: BeautifulSoup = soup.find('div', {'class': 'output-specification'})
+    output_specification: Chapter = Chapter(output, 'section-title', 'i/o')
 
     test_soup: BeautifulSoup = soup.find('div', {'class': 'sample-tests'})
     tests: Chapter = Chapter(test_soup, 'input', 'tests')
@@ -201,7 +200,7 @@ async def print_tasks_from_define_contest(message: types.Message):
         return await message.answer('Напишите один идентификатор контеста')
     try:
         contest_id = int(message.text.split()[-1])
-    except Exception as _error:
+    except Exception:
         return await message.answer('Идентификатор должен быть целым числом')
 
     sql_query: str = f"SELECT tasks from contests Where id={contest_id}"
@@ -228,7 +227,7 @@ async def print_contests_for_tag_and_rating(message: types.Message):
 
     try:
         rating = int(rating)
-    except Exception as _error:
+    except Exception:
         return await message.answer('Сложность должна быть целым числом')
 
     if not isinstance(tag, str):
@@ -241,7 +240,7 @@ async def print_contests_for_tag_and_rating(message: types.Message):
 
     response: list = await get_data_from_db(
         f"""
-        SELECT id, number, tag, rating from contests 
+        SELECT id, number, tag, rating from contests
         WHERE tag='{tag}' and rating='{rating}'
         """
     )
@@ -260,12 +259,12 @@ async def print_task_description(message: types.Message):
         return await message.answer('Неверное количество аргументов')
     try:
         task_id = int(message.text.split()[1])
-    except Exception as _error:
+    except Exception:
         return await message.answer('Неверный тип данных')
 
     sql_query: str = f"SELECT name_and_number FROM tasks WHERE id={task_id}"
     if not await check_exists(sql_query):
-        return await message.answer('Задача с таким идентификатором не найдена')
+        return await message.answer('Задача с таким ID не найдена')
 
     name_number_index: list = await get_data_from_db(sql_query)
 
@@ -300,4 +299,3 @@ async def unknown_command(message: types.Message):
 if __name__ == '__main__':
     log = cfg.get_logger('bot', 'bot_log')
     executor.start_polling(dp, skip_updates=True)
-

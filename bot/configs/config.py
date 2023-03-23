@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import sys
@@ -12,7 +13,6 @@ HOST: str = 'localhost'   # localhost для локального запуска
 PORT: int = 5432
 
 # For Windows
-import asyncio
 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 DSN: str = f'dbname={DB_NAME} user={USER} password={PASSWORD} host={HOST}'
 REGEX: str = r"[^a-zA-Zа-яА-Я0-9, ]+"

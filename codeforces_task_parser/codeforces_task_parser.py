@@ -112,7 +112,7 @@ async def adding_tasks_in_table(
     )
     await filling_table('tasks', new_tasks)
     await send_request_to_db('DROP TABLE contests')
-    await check_or_create_table(('contests', cfg.CONTESTS_TABLE_MAKE_SQL_QUERY))
+    await check_or_create_table(('contests', cfg.CONTEST_TABLE_MAKE_SQL_QUERY))
 
 
 async def filling_table(table_name: str, content: list) -> None:
@@ -153,6 +153,7 @@ async def send_message_to_tg(message: str) -> None:
         data: dict = {'chat_id': cfg.TELEGRAM_CHAT_ID, 'text': message}
         async with aiohttp.ClientSession() as session:
             post: ClientResponse = await session.post(url, data=data)
+            post.close()
     except custom_exceptions.TelegramError as _error:
         raise custom_exceptions.TelegramError(
             f'Сообщение не отправлено, ошибка - {_error}'
@@ -171,7 +172,8 @@ async def check_tokens() -> bool:
 
 async def get_unique_tags_and_rating() -> tuple:
     log.info('Запрос тем и рейтингов из базы')
-    tags_ratings: list = await get_data_from_db('SELECT tags, rating FROM tasks;')
+    tags_ratings: list = await get_data_from_db(
+        'SELECT tags, rating FROM tasks;')
 
     unique_tags: list = []
     unique_rating: list = []
@@ -219,8 +221,8 @@ async def get_contests(unique_tags: list, unique_rating: list) -> list:
             for urating in unique_rating:
                 data: list = await get_data_from_db(
                     f"""
-                    SELECT * FROM tasks WHERE '{utag}'=ANY(tags) 
-                    AND rating={urating} 
+                    SELECT * FROM tasks WHERE '{utag}'=ANY(tags)
+                    AND rating={urating}
                     AND id not in ({', '.join(given_tasks_ids)}) LIMIT 10;
                     """
                 )
@@ -246,7 +248,8 @@ async def check_or_create_table(table_name_and_sql_query: tuple) -> None:
             """
         )
         if not response:
-            log.info(f'Таблица {table_name} не найдена, создание новой таблицы')
+            log.info(
+                f'Таблица {table_name} не найдена, создание новой таблицы')
             await send_request_to_db(sql_query)
             connection.commit()
             log.info(f'Таблица {table_name} создана, первичное заполнение')
@@ -271,21 +274,22 @@ async def main() -> None:
         log.info('Токены обнаружены, запуск бота для отправки крит. ошибок')
         message = 'Бот запущен'
         log.info(message)
-        # send_message_to_tg(message)
+        await send_message_to_tg(message)
 
         global connection
         connection = connect_to_db()
         await check_or_create_table(
             (
-                ('tasks', cfg.TASKS_TABLE_MAKE_SQL_QUERY),
-                ('contests', cfg.CONTESTS_TABLE_MAKE_SQL_QUERY),
+                ('tasks', cfg.TASK_TABLE_MAKE_SQL_QUERY),
+                ('contests', cfg.CONTEST_TABLE_MAKE_SQL_QUERY),
             ),
 
         )
         tasks_in_db_count: int = await get_count_of_records_in_table('tasks')
         log.info(f'Задач в таблице - {tasks_in_db_count}')
         log.info(
-            f'Контестов в таблице - {await get_count_of_records_in_table("contests")}'
+            f"""Контестов в таблице - {await get_count_of_records_in_table(
+                                                                "contests")}"""
         )
 
         while True:
@@ -298,8 +302,8 @@ async def main() -> None:
 
                 if tasks_response_count != tasks_in_db_count:
                     log.info(
-                        f"""Количество записей в БД и в ответе не равно 
-                        ({tasks_in_db_count}!={tasks_response_count}), 
+                        f"""Количество записей в БД и в ответе не равно
+                        ({tasks_in_db_count}!={tasks_response_count}),
                         начинаем парсить ответ"""
                         )
                     await adding_tasks_in_table(
@@ -328,7 +332,7 @@ async def main() -> None:
     except Exception as _exception:
         message = f'Ошибка во время работы с PostgreSQL:\n {_exception}\n'
         log.critical(message, exc_info=True)
-        # await send_message_to_tg(message)
+        await send_message_to_tg(message)
 
     finally:
         if connection:
