@@ -1,5 +1,5 @@
+import asyncio
 import sys
-import time
 
 import psycopg2
 import requests
@@ -8,6 +8,7 @@ import configs.config as cfg
 import configs.custom_exceptions as custom_exceptions
 
 connection = None
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def connect_to_db():
@@ -25,16 +26,17 @@ def connect_to_db():
     return connect
 
 
-def get_data_from_db(request: str) -> list:
+async def get_data_from_db(request: str) -> list:
     try:
         with connection.cursor() as cursor:
             cursor.execute(request)
             return cursor.fetchall()
+
     except Exception as _error:
         raise custom_exceptions.GettingDataFromDbFailed(_error)
 
 
-def send_request_to_db(request: str) -> None:
+async def send_request_to_db(request: str) -> None:
     try:
         with connection.cursor() as cursor:
             cursor.execute(request)
@@ -42,7 +44,7 @@ def send_request_to_db(request: str) -> None:
         raise custom_exceptions.SendRequestToDbFailed(_error)
 
 
-def send_requests_to_db(request: str, tasks: list) -> None:
+async def send_requests_to_db(request: str, tasks: list) -> None:
     try:
         with connection.cursor() as cursor:
             for i in tasks[::-1]:
@@ -51,7 +53,7 @@ def send_requests_to_db(request: str, tasks: list) -> None:
         raise custom_exceptions.SendRequestToDbFailed(_error)
 
 
-def get_json_response() -> dict:
+async def get_json_response() -> dict:
     log.info("Запрос к API Codeforces и преобразование в формат json")
     try:
         json_response: dict = requests.get(cfg.ENDPOINT).json()
@@ -66,7 +68,7 @@ def get_json_response() -> dict:
     return json_response
 
 
-def get_parse_response(response: dict) -> list:
+async def get_parse_response(response: dict) -> list:
     log.info('Парсинг полученного ответа')
     problems: dict = response.get('problems')
     problems_statistic: dict = response.get('problemStatistics')
@@ -92,7 +94,7 @@ def get_parse_response(response: dict) -> list:
     return parsed_data
 
 
-def adding_tasks_in_table(
+async def adding_tasks_in_table(
         last_table_record_name: str, parsed_tasks: list) -> None:
     log.info('Создание и заполнение массива новыми задачами')
     new_tasks: list = []
@@ -106,12 +108,12 @@ def adding_tasks_in_table(
     log.info(
         f'Добавление {len(new_tasks)} задач в таблицу'
     )
-    filling_table('tasks', new_tasks)
-    send_request_to_db('DROP TABLE contests')
-    check_or_create_table(('contests', cfg.CONTESTS_TABLE_MAKE_SQL_QUERY))
+    await filling_table('tasks', new_tasks)
+    await send_request_to_db('DROP TABLE contests')
+    await check_or_create_table(('contests', cfg.CONTESTS_TABLE_MAKE_SQL_QUERY))
 
 
-def filling_table(table_name: str, content: list) -> None:
+async def filling_table(table_name: str, content: list) -> None:
     log.info('Внесение данных в таблицу')
 
     if table_name == 'tasks':
@@ -121,26 +123,28 @@ def filling_table(table_name: str, content: list) -> None:
     else:
         raise custom_exceptions.UnknownTableName('Неизвестная таблица')
 
-    send_requests_to_db(sql_query, content)
+    await send_requests_to_db(sql_query, content)
     connection.commit()
 
 
-def get_last_record_from_table() -> str:
+async def get_last_record_from_table() -> str:
     log.info('Получение последней записи из таблицы')
-    return get_data_from_db(
+    data: list = await get_data_from_db(
         """
         SELECT name_and_number FROM tasks
         ORDER BY id DESC LIMIT 1;
         """
-    )[0]
+    )
+    return data[0]
 
 
-def get_count_of_records_in_table(table_name: str) -> int:
+async def get_count_of_records_in_table(table_name: str) -> int:
     log.info(f'Получение количества записей в таблице {table_name}')
-    return int(*get_data_from_db(f'SELECT count(*) FROM {table_name}')[0])
+    data: list = await get_data_from_db(f'SELECT count(*) FROM {table_name}')
+    return int(*data[0])
 
 
-def send_message_to_tg(message: str) -> None:
+async def send_message_to_tg(message: str) -> None:
     try:
         log.info("Отправка сообщения")
         url = f'https://api.telegram.org/bot{cfg.TELEGRAM_TOKEN}/sendMessage'
@@ -152,7 +156,7 @@ def send_message_to_tg(message: str) -> None:
         )
 
 
-def check_tokens() -> bool:
+async def check_tokens() -> bool:
     log.info('Проверка наличия всех токенов в файле .env')
     return all(
         [
@@ -162,9 +166,9 @@ def check_tokens() -> bool:
     )
 
 
-def get_unique_tags_and_rating() -> tuple:
+async def get_unique_tags_and_rating() -> tuple:
     log.info('Запрос тем и рейтингов из базы')
-    tags_ratings: list = get_data_from_db('SELECT tags, rating FROM tasks;')
+    tags_ratings: list = await get_data_from_db('SELECT tags, rating FROM tasks;')
 
     unique_tags: list = []
     unique_rating: list = []
@@ -180,9 +184,9 @@ def get_unique_tags_and_rating() -> tuple:
     return sorted(unique_tags), sorted(unique_rating)
 
 
-def get_contests(unique_tags: list, unique_rating: list) -> list:
+async def get_contests(unique_tags: list, unique_rating: list) -> list:
     log.info('Запрос всех задач из базы')
-    tasks: list = get_data_from_db(
+    tasks: list = await get_data_from_db(
         """
         SELECT tags, count_solved, name_and_number, rating FROM tasks;
         """
@@ -210,7 +214,7 @@ def get_contests(unique_tags: list, unique_rating: list) -> list:
         for utag in sorted_unique_tags_copy:
             empty: bool = True
             for urating in unique_rating:
-                data: list = get_data_from_db(
+                data: list = await get_data_from_db(
                     f"""
                     SELECT * FROM tasks WHERE '{utag}'=ANY(tags) 
                     AND rating={urating} 
@@ -229,10 +233,10 @@ def get_contests(unique_tags: list, unique_rating: list) -> list:
     return contests
 
 
-def check_or_create_table(table_name_and_sql_query: tuple) -> None:
+async def check_or_create_table(table_name_and_sql_query: tuple) -> None:
     for table_name, sql_query in table_name_and_sql_query:
         log.info(f'Проверка БД на наличие таблицы {table_name}')
-        response: list = get_data_from_db(
+        response: list = await get_data_from_db(
             f"""
             SELECT table_name FROM information_schema.tables
             WHERE table_name = '{table_name}';
@@ -240,21 +244,23 @@ def check_or_create_table(table_name_and_sql_query: tuple) -> None:
         )
         if not response:
             log.info(f'Таблица {table_name} не найдена, создание новой таблицы')
-            send_request_to_db(sql_query)
+            await send_request_to_db(sql_query)
             connection.commit()
             log.info(f'Таблица {table_name} создана, первичное заполнение')
             if table_name == 'contests':
-                content = get_contests(*get_unique_tags_and_rating())
+                utag_urating: tuple = await get_unique_tags_and_rating()
+                content: list = await get_contests(*utag_urating)
             elif table_name == 'tasks':
-                content = get_parse_response(get_json_response().get('result'))
+                data = await get_json_response()
+                content: list = await get_parse_response(data.get('result'))
             else:
                 raise custom_exceptions.UnknownTableName('Неизвестная таблица')
-            filling_table(table_name, content)
+            await filling_table(table_name, content)
 
 
-def main() -> None:
+async def main() -> None:
     try:
-        if not check_tokens():
+        if not await check_tokens():
             message: str = "Отсутствуют один или несколько токенов!"
             log.critical(message)
             sys.exit(message)
@@ -262,27 +268,28 @@ def main() -> None:
         log.info('Токены обнаружены, запуск бота для отправки крит. ошибок')
         message = 'Бот запущен'
         log.info(message)
-        send_message_to_tg(message)
+        # send_message_to_tg(message)
 
         global connection
         connection = connect_to_db()
-        check_or_create_table(
+        await check_or_create_table(
             (
                 ('tasks', cfg.TASKS_TABLE_MAKE_SQL_QUERY),
                 ('contests', cfg.CONTESTS_TABLE_MAKE_SQL_QUERY),
             ),
 
         )
-        tasks_in_db_count: int = get_count_of_records_in_table('tasks')
+        tasks_in_db_count: int = await get_count_of_records_in_table('tasks')
         log.info(f'Задач в таблице - {tasks_in_db_count}')
         log.info(
-            f'Контестов в таблице - {get_count_of_records_in_table("contests")}'
+            f'Контестов в таблице - {await get_count_of_records_in_table("contests")}'
         )
 
         while True:
             try:
                 log.info('------------Вход в цикл-------------------------')
-                json_response: dict = get_json_response().get('result')
+                data = await get_json_response()
+                json_response: dict = data.get('result')
                 tasks_response_count: int = len(json_response.get('problems'))
                 log.info('Сравнение количества записей в БД и в ответе')
 
@@ -292,9 +299,9 @@ def main() -> None:
                         ({tasks_in_db_count}!={tasks_response_count}), 
                         начинаем парсить ответ"""
                         )
-                    adding_tasks_in_table(
-                       get_last_record_from_table(),
-                       get_parse_response(json_response)
+                    await adding_tasks_in_table(
+                       await get_last_record_from_table(),
+                       await get_parse_response(json_response)
                     )
                     tasks_in_db_count = tasks_response_count
                 else:
@@ -309,17 +316,16 @@ def main() -> None:
 
             else:
                 log.info('Ожидание - 1 час')
-                time.sleep(cfg.RETRY_TIME)
+                await asyncio.sleep(cfg.RETRY_TIME)
 
     except custom_exceptions.NotForSend as _error:
         message = f'Бот упал с ошибкой:\n {_error}\n'
         log.error(message, exc_info=True)
 
     except Exception as _exception:
-        connection.rollback()
         message = f'Ошибка во время работы с PostgreSQL:\n {_exception}\n'
         log.critical(message, exc_info=True)
-        send_message_to_tg(message)
+        # await send_message_to_tg(message)
 
     finally:
         if connection:
@@ -329,4 +335,4 @@ def main() -> None:
 
 if __name__ == '__main__':
     log = cfg.get_logger('task_parser', 'task_parser_log')
-    main()
+    asyncio.run(main())

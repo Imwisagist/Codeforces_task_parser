@@ -12,8 +12,9 @@ load_dotenv()
 TELEGRAM_CHAT_ID: str = os.getenv('TELEGRAM_CHAT_ID')
 TELEGRAM_TOKEN: str = os.getenv('TELEGRAM_TOKEN')
 USER = DB_NAME = PASSWORD = 'postgres'
-HOST: str = 'db'   # localhost для локального запуска # db для докера
+HOST: str = 'localhost'   # localhost для локального запуска # db для докера
 PORT: int = 5432
+DSN: str = f'dbname={DB_NAME} user={USER} password={PASSWORD} host={HOST}'
 
 CONTESTS_TABLE_MAKE_SQL_QUERY: str = """
 CREATE TABLE contests(id SERIAL PRIMARY KEY, number int NOT NULL,
