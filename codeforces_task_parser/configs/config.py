@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import sys
@@ -14,7 +15,9 @@ TELEGRAM_TOKEN: str = os.getenv('TELEGRAM_TOKEN')
 USER = DB_NAME = PASSWORD = 'postgres'
 HOST: str = 'localhost'   # localhost для локального запуска # db для докера
 PORT: int = 5432
+
 DSN: str = f'dbname={DB_NAME} user={USER} password={PASSWORD} host={HOST}'
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 CONTESTS_TABLE_MAKE_SQL_QUERY: str = """
 CREATE TABLE contests(id SERIAL PRIMARY KEY, number int NOT NULL,

@@ -1,14 +1,14 @@
 import asyncio
 import sys
 
+import aiohttp
 import psycopg2
-import requests
+from aiohttp import ClientResponse
 
 import configs.config as cfg
 import configs.custom_exceptions as custom_exceptions
 
 connection = None
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def connect_to_db():
@@ -56,7 +56,9 @@ async def send_requests_to_db(request: str, tasks: list) -> None:
 async def get_json_response() -> dict:
     log.info("Запрос к API Codeforces и преобразование в формат json")
     try:
-        json_response: dict = requests.get(cfg.ENDPOINT).json()
+        async with aiohttp.ClientSession() as session:
+            response: ClientResponse = await session.get(cfg.ENDPOINT)
+            json_response: dict = await response.json()
     except Exception as _error:
         raise custom_exceptions.ResponseFromApiWasntRecieved(_error)
 
@@ -148,8 +150,9 @@ async def send_message_to_tg(message: str) -> None:
     try:
         log.info("Отправка сообщения")
         url = f'https://api.telegram.org/bot{cfg.TELEGRAM_TOKEN}/sendMessage'
-        data = {'chat_id': cfg.TELEGRAM_CHAT_ID, 'text': message}
-        requests.post(url, data)
+        data: dict = {'chat_id': cfg.TELEGRAM_CHAT_ID, 'text': message}
+        async with aiohttp.ClientSession() as session:
+            post: ClientResponse = await session.post(url, data=data)
     except custom_exceptions.TelegramError as _error:
         raise custom_exceptions.TelegramError(
             f'Сообщение не отправлено, ошибка - {_error}'

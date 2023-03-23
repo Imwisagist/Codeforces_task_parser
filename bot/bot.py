@@ -1,7 +1,7 @@
 import re
 
 import aiopg
-import requests
+import aiohttp
 from aiogram import Bot, Dispatcher, executor, types
 from bs4 import BeautifulSoup
 from requests import Response
@@ -108,15 +108,16 @@ async def parse_contest(source_contest: list) -> list:
 
 async def get_task_descriptions(task_url: str) -> str:
     try:
-        response: Response = requests.get(task_url)
-        if response.status_code != 200:
+        async with aiohttp.ClientSession() as session:
+            response = await session.get(task_url)
+        if response.status != 200:
             raise Exception('Не успешный код ответа')
     except Exception as _error:
         message: str = 'Codeforces не отвечает'
         log.critical(message, _error, exc_info=True)
         return message
 
-    soup: BeautifulSoup = BeautifulSoup(response.text, 'html.parser')
+    soup: BeautifulSoup = BeautifulSoup(await response.text(), 'html.parser')
 
     header: BeautifulSoup = soup.find('div', {'class': 'header'})
     title: str = header.find('div', {'class': 'title'}).text.strip()
