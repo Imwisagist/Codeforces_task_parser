@@ -12,50 +12,62 @@ dp = Dispatcher(Bot(token=cfg.TELEGRAM_TOKEN))
 
 class Chapter:
     def __init__(self, task: BeautifulSoup, class_: str, section: str) -> None:
-        self.output = self.value = self.title = None
-        self.class_ = class_
-        self.task = task
-        self.activate_fields(section)
+        self.__output: str = ''
+        self.__class_: str = class_
+        self.__task: BeautifulSoup = task
+        self.__activate_fields(section)
+
+    @property
+    def output(self):
+        return self.__output
+
+    @output.setter
+    def output(self, output):
+        self.__output = output
+
+    @output.deleter
+    def output(self):
+        del self.__output
 
     @staticmethod
-    def parsed_data(data):
+    def __parsed_data(data):
         input_ = data.find('div', {'class': 'title'})
         value_ = str(
             input_.next_sibling).replace('<br/>', '\n')[5:-6].rstrip()
         input_ = input_.text.strip()
         return f"\n{input_}\n{cfg.SEP}\n{value_}\n{cfg.SEP}"
 
-    def activate_fields(self, section) -> None:
+    def __activate_fields(self, section) -> None:
         if section == 'header':
-            self.activate_header_fields()
+            self.__activate_header_fields()
         elif section == 'i/o':
-            self.activate_input_or_output_fields()
+            self.__activate_input_or_output_fields()
         elif section == 'tests':
-            self.activate_tests_fields()
+            self.__activate_tests_fields()
 
-    def activate_header_fields(self) -> None:
-        self.class_ = self.task.find('div', {'class': f'{self.class_}'})
-        self.title = self.class_.find(
+    def __activate_header_fields(self) -> None:
+        class_ = self.__task.find('div', {'class': f'{self.__class_}'})
+        title = class_.find(
             'div', {'class': 'property-title'}).text.strip()
-        self.value = str(self.class_.find(
+        value = str(class_.find(
             'div', {'class': 'property-title'}).next_sibling)
-        self.output = self.title + ': ' + self.value
+        self.output = title + ': ' + value
 
-    def activate_input_or_output_fields(self) -> None:
-        self.title = self.task.find('div', {'class': f'{self.class_}'})
-        self.value = self.title.next_sibling.text.strip()
-        self.title = self.title.text.strip()
-        self.output = self.title + f"\n{cfg.SEP}\n" + self.value
+    def __activate_input_or_output_fields(self) -> None:
+        title = self.__task.find('div', {'class': f'{self.__class_}'})
+        value = title.next_sibling.text.strip()
+        title = title.text.strip()
+        self.output = title + f"\n{cfg.SEP}\n" + value
 
-    def activate_tests_fields(self) -> None:
-        examples = self.task.find(
+    def __activate_tests_fields(self) -> None:
+        examples = self.__task.find(
             'div', {'class': 'section-title'}).text.strip()
-        inputs = self.task.findAll('div', {'class': 'input'})
-        outputs = self.task.findAll('div', {'class': 'output'})
+        inputs = self.__task.findAll('div', {'class': 'input'})
+        outputs = self.__task.findAll('div', {'class': 'output'})
         self.output = (
-            examples + f'\n{cfg.SEP}' + self.parsed_data(inputs[0]) +
-            self.parsed_data(outputs[0]) +
-            (self.parsed_data(inputs[1]) + self.parsed_data(outputs[1])) if
+            examples + f'\n{cfg.SEP}' + self.__parsed_data(inputs[0]) +
+            self.__parsed_data(outputs[0]) +
+            (self.__parsed_data(inputs[1]) + self.__parsed_data(outputs[1])) if
             len(inputs) == 2 else ''
         )
 

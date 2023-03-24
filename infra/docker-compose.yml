@@ -13,7 +13,7 @@ services:
     container_name: db
 
   parser:
-     image: imwisagist/codeforces_task_parser:v1.1
+     image: imwisagist/codeforces_task_parser:v1.2
      restart: always
      depends_on:
        - db
@@ -22,7 +22,7 @@ services:
      container_name: parser
 
   bot:
-    image: imwisagist/codeforces_bot:v1.1
+    image: imwisagist/codeforces_bot:v1.2
     restart: always
     depends_on:
       - parser
