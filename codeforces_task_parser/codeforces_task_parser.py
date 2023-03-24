@@ -4,6 +4,7 @@ import sys
 import aiohttp
 import psycopg2
 from aiohttp import ClientResponse
+from tqdm import tqdm
 
 import configs.config as cfg
 import configs.custom_exceptions as custom_exceptions
@@ -64,12 +65,12 @@ async def get_parse_response(response: dict) -> list:
     problems_statistic: dict = response.get('problemStatistics')
     parsed_data: list = []
 
-    for i in range(len(problems)):
+    for i in tqdm(range(len(problems))):
         tags: list = problems[i].get('tags')
         if not tags:
             rus_tags: list = [cfg.rus_tags['task without tags']]
         else:
-            rus_tags: list = [cfg.rus_tags[tag] for tag in tags]
+            rus_tags: list = [cfg.rus_tags.get(tag, 'Unknown') for tag in tags]
         parsed_data.append(
             [
                 rus_tags,
@@ -82,7 +83,6 @@ async def get_parse_response(response: dict) -> list:
                 problems[i].get('rating', 0),
             ]
         )
-
     return parsed_data
 
 
@@ -91,7 +91,7 @@ async def adding_tasks_in_table(
     log.info('Создание и заполнение массива новыми задачами')
     new_tasks: list = []
 
-    for task in parsed_tasks:
+    for task in tqdm(parsed_tasks):
         if task[2] != last_table_record_name:
             new_tasks.append(task)
         else:
@@ -169,7 +169,7 @@ async def get_unique_tags_and_rating() -> tuple:
     unique_rating: list = []
 
     log.info('Подготовка данных, поиск уникальных тем и сложностей задач')
-    for tags_tuple in tags_ratings:
+    for tags_tuple in tqdm(tags_ratings):
         for tag in tags_tuple[0]:
             if tag not in unique_tags:
                 unique_tags.append(tag)
@@ -191,7 +191,7 @@ async def get_contests(unique_tags: list, unique_rating: list) -> list:
         'Подсчёт, как часто встречается тема и сортировка по неубыванию'
     )
     tag_meet_frequency: dict = {}
-    for utag in unique_tags:
+    for utag in tqdm(unique_tags):
         for task in tasks:
             if utag in task[0]:
                 tag_meet_frequency[utag] = tag_meet_frequency.get(utag, 0) + 1
@@ -206,7 +206,7 @@ async def get_contests(unique_tags: list, unique_rating: list) -> list:
 
     log.info('Создание контестов')
     while sorted_unique_tags_copy:
-        for utag in sorted_unique_tags_copy:
+        for utag in tqdm(sorted_unique_tags_copy):
             empty: bool = True
             for urating in unique_rating:
                 data: list = await send_request_to_db(

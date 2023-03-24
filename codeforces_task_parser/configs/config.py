@@ -1,4 +1,4 @@
-# import asyncio
+import asyncio
 import logging
 import os
 import sys
@@ -6,7 +6,8 @@ from logging import Logger
 
 from dotenv import load_dotenv
 
-# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+#Activate for Windows
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 ENDPOINT: str = 'https://codeforces.com/api/problemset.problems?lang=ru'
 RETRY_TIME: int = 3600
@@ -15,7 +16,7 @@ load_dotenv()
 TELEGRAM_CHAT_ID: str = os.getenv('TELEGRAM_CHAT_ID')
 TELEGRAM_TOKEN: str = os.getenv('TELEGRAM_TOKEN')
 USER = DB_NAME = PASSWORD = 'postgres'
-HOST: str = 'db'   # localhost для локального запуска # db для докера
+HOST: str = 'localhost'   # localhost для локального запуска # db для докера
 PORT: int = 5432
 
 CONTEST_TABLE_MAKE_SQL_QUERY: str = """
